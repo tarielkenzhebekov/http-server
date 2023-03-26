@@ -66,8 +66,28 @@ public class HttpServer implements Runnable {
 
             Path filePath = getFilePath(path);
             if (Files.exists(filePath)) {
-                String contentType = guessContentType(filePath);
-                sendResponse(socket, "200 OK", contentType, Files.readAllBytes(filePath));
+                if (Files.isDirectory(filePath)){
+                    File directoryPath = new File(filePath.toString());
+                    String[] contents = directoryPath.list();
+
+                    String relativePath;
+                    if ("/".equals(path)) {
+                        relativePath = "";
+                    } else {
+                        relativePath = path;
+                    }
+
+                    StringBuilder directoryList = new StringBuilder();
+                    directoryList.append("<a href=\"javascript:history.back()\">..</a><br>");
+
+                    for (String content : contents) {
+                        directoryList.append("<a href=\"" + relativePath + "/" + content + "\">" + content + "</a><br>");
+                    }
+                    sendResponse(socket, "200 OK", "text/html", directoryList.toString().getBytes());
+                } else {
+                    String contentType = guessContentType(filePath);
+                    sendResponse(socket, "200 OK", contentType, Files.readAllBytes(filePath));
+                }
             } else {
                 byte[] notFoundContent = "<h1>404 Not found</h1>".getBytes();
                 sendResponse(socket, "404 Not Found", "text/html", notFoundContent);
@@ -89,9 +109,9 @@ public class HttpServer implements Runnable {
     }
 
     private static Path getFilePath(String path) {
-        if ("/".equals(path)) {
-            path = "/index.html";
-        }
+//        if ("/".equals(path)) {
+//            path = "/index.html";
+//        }
 
         return Paths.get(WEB_ROOT, path);
     }
