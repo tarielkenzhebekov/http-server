@@ -1,60 +1,79 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
-public class HttpServer {
+public class HttpServer implements Runnable {
+    private static final String WEB_ROOT = "/home/tariel";
+    private static final String DEFAULT_FILE = "index.html";
+    private static final int PORT = 8080;
+    private Socket socket;
+
+    public HttpServer(Socket socket) {
+        this.socket = socket;
+    }
+
     public static void main(String[] args) throws IOException {
-        try (ServerSocket serverSocket = new ServerSocket(8080)) {
+        try {
+            ServerSocket serverSocket = new ServerSocket(PORT);
+            System.out.println("Server started.\nListening for connections on port: " + PORT + "...");
+
             while(true) {
-                try (Socket client = serverSocket.accept()) {
-                    handleClient(client);
-                }
+                HttpServer myServer = new HttpServer(serverSocket.accept());
+                System.out.println("Connection opened. (" + new Date() + ")");
+
+                Thread thread = new Thread(myServer);
+                thread.start();
             }
+        } catch (IOException e) {
+            System.err.println("Server Connection error: " + e.getMessage());
         }
     }
 
-    private static void handleClient(Socket client) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
+    @Override
+    public void run() {
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-        StringBuilder requestBuilder = new StringBuilder();
-        String line;
-        while(!(line = br.readLine()).isBlank()) {
-            requestBuilder.append(line + "\r\n");
-        }
+            StringBuilder requestBuilder = new StringBuilder();
+            String line;
+            while (!(line = br.readLine()).isBlank()) {
+                requestBuilder.append(line + "\r\n");
+            }
 
-        String request = requestBuilder.toString();
-        String[] requestLines = request.split("\r\n");
-        String[] requestLine = requestLines[0].split(" ");
-        String method = requestLine[0];
-        String path = requestLine[1];
-        String version = requestLine[2];
-        String host = requestLines[1].split(" ")[1];
+            String request = requestBuilder.toString();
+            String[] requestLines = request.split("\r\n");
+            String[] requestLine = requestLines[0].split(" ");
+            String method = requestLine[0];
+            String path = requestLine[1];
+            String version = requestLine[2];
+            String host = requestLines[1].split(" ")[1];
 
-        List<String> headers = new ArrayList<>();
-        for (int h = 2; h < requestLines.length; h++) {
-            String header = requestLines[h];
-            headers.add(header);
-        }
+            List<String> headers = new ArrayList<>();
+            for (int h = 2; h < requestLines.length; h++) {
+                String header = requestLines[h];
+                headers.add(header);
+            }
 
-        String accessLog = String.format("Client %s, method %s, path %s, version %s, host %s, headers %s",
-                client.toString(), method, path, version, host, headers.toString());
-        System.out.println(accessLog);
+            String accessLog = String.format("Client %s, method %s, path %s, version %s, host %s, headers %s",
+                    socket.toString(), method, path, version, host, headers.toString());
+            System.out.println(accessLog);
 
-        Path filePath = getFilePath(path);
-        if (Files.exists(filePath)) {
-            String contentType = guessContentType(filePath);
-            sendResponse(client, "200 OK", contentType, Files.readAllBytes(filePath));
-        } else {
-            byte[] notFoundContent = "<h1>404 Not found</h1>".getBytes();
-            sendResponse(client, "404 Not Found", "text/html", notFoundContent);
+            Path filePath = getFilePath(path);
+            if (Files.exists(filePath)) {
+                String contentType = guessContentType(filePath);
+                sendResponse(socket, "200 OK", contentType, Files.readAllBytes(filePath));
+            } else {
+                byte[] notFoundContent = "<h1>404 Not found</h1>".getBytes();
+                sendResponse(socket, "404 Not Found", "text/html", notFoundContent);
+            }
+        } catch (IOException e) {
+            System.err.println("Server error: " + e);
         }
     }
 
@@ -74,7 +93,7 @@ public class HttpServer {
             path = "/index.html";
         }
 
-        return Paths.get("/home/tariel", path);
+        return Paths.get(WEB_ROOT, path);
     }
 
     private static String guessContentType(Path filePath) throws IOException {
