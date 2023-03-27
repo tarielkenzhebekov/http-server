@@ -67,8 +67,8 @@ public class HttpServer implements Runnable {
             Path filePath = getFilePath(path);
             if (Files.exists(filePath)) {
                 if (Files.isDirectory(filePath)){
-                    File directoryPath = new File(filePath.toString());
-                    String[] contents = directoryPath.list();
+                    File directory = new File(filePath.toString());
+                    String[] contents = directory.list();
 
                     String relativePath;
                     if ("/".equals(path)) {
@@ -81,7 +81,10 @@ public class HttpServer implements Runnable {
                     directoryList.append("<a href=\"javascript:history.back()\">..</a><br>");
 
                     for (String content : contents) {
-                        directoryList.append("<a href=\"" + relativePath + "/" + content + "\">" + content + "</a><br>");
+//                        Exclude hidden files
+                        if (!content.startsWith(".")) {
+                            directoryList.append("<a href=\"" + relativePath + "/" + content + "\">" + content + "</a><br>");
+                        }
                     }
                     sendResponse(socket, "200 OK", "text/html", directoryList.toString().getBytes());
                 } else {
